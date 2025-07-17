@@ -2,7 +2,9 @@
 FROM bitnami/spark:3
 
 # Instalar a biblioteca Python para conectar ao Kafka
-RUN pip install kafka-python
+USER root
+RUN pip install kafka-python numpy
+
 
 # Copiar nosso script do Jogo da Vida para dentro da imagem
 COPY engine_spark.py /app/
@@ -12,6 +14,8 @@ WORKDIR /app
 
 # Comando para executar a aplicação quando o container iniciar
 CMD ["spark-submit", "engine_spark.py"]
+
+
 
 
 
