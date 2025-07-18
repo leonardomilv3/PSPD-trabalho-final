@@ -31,7 +31,7 @@ A comunicação entre os serviços é realizada por meio de sockets TCP e enviad
 A Figura 1 ilustra de forma completa toda a infraestrutura e comunicação entre os serviços.
 
 <p align="center">
-  <img src="./assets/ArquiteturaVMs.png" alt="Figura 1 - Arquitetura geral" width="100%">
+  <img src="./assets/Arquitetura3VMs.png" alt="Figura 1 - Arquitetura geral" width="100%">
 </p>
 
 <p align="center"><strong>Figura 1</strong> - Arquitetura geral</p>
