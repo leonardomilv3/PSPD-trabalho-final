@@ -29,9 +29,11 @@ O sistema utiliza um cluster Kubernetes autogerenciado (self-hosted), configurad
 A comunicação entre os serviços é realizada por meio de sockets TCP e enviada periodicamente ao stack ELK (ElasticSearch - Kibana). O projeto tem como foco principal a análise de desempenho de algoritmos paralelos em ambientes distribuídos, oferecendo uma estrutura prática e extensível para avaliação de workloads científicos em escala.
 
 A Figura 1 ilustra de forma completa toda a infraestrutura e comunicação entre os serviços.
-<center>
-![Figura 1 - Arquitetura geral](./assets/ArquiteturaVMs.png)
-<center>
+
+<p align="center">
+  <img src="./assets/ArquiteturaVMs.png" alt="Figura 1 - Arquitetura geral" width="60%">
+</p>
+
 <p align="center"><strong>Figura 1</strong> - Arquitetura geral</p>
 
 
