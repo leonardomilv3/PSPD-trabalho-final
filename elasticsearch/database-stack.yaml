@@ -1,0 +1,78 @@
+# --- DEPLOYMENT E SERVIÇO DO ELASTICSEARCH ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9200
+        env:
+        - name: discovery.type
+          value: "single-node"
+        - name: xpack.security.enabled
+          value: "false" # Desabilita segurança para simplificar o projeto
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - protocol: TCP
+    port: 9200
+    targetPort: 9200
+
+---
+# --- DEPLOYMENT E SERVIÇO DO KIBANA ---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:8.9.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5601
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch-service:9200" # Aponta para o serviço do Elastic
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-service
+spec:
+  type: NodePort
+  selector:
+    app: kibana
+  ports:
+  - protocol: TCP
+    port: 5601
+    targetPort: 5601
+    nodePort: 30002 # Porta para acessar o Kibana pelo navegador
