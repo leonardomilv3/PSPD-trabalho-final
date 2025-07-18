@@ -14,7 +14,7 @@ WORKDIR /app
 COPY . .
 
 # Compila o código DENTRO do container, linkando com a biblioteca json-c
-RUN mpicc -fopenmp -o engine Engine_MPI_OpenMP.c -ljson-c
+RUN mpicc -fopenmp -o engine engine_socket_mpi_openmp.c -ljson-c
 
 # O EXPOSE foi removido, pois este container não escuta por conexões.
 
