@@ -30,7 +30,7 @@ A comunicação entre os serviços é realizada por meio de sockets TCP e enviad
 
 A Figura 1 ilustra de forma completa toda a infraestrutura e comunicação entre os serviços.
 
-![Figura 1 - Arquitetura geral](./assets/PSPD-arquitetura2.png)
+![Figura 1 - Arquitetura geral](./assets/ArquiteturaVMs.png)
 <p align="center"><strong>Figura 1</strong> - Arquitetura geral</p>
 
 
