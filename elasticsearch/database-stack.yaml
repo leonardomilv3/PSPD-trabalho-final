@@ -62,6 +62,8 @@ spec:
         env:
         - name: ELASTICSEARCH_HOSTS
           value: "http://elasticsearch-service:9200" # Aponta para o serviço do Elastic
+        - name: SERVER_SSL_ENABLED
+          value: "false"
 ---
 apiVersion: v1
 kind: Service
