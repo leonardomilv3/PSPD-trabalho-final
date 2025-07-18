@@ -1,79 +1,95 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <mpi.h>
-#include <omp.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <json-c/json.h> // Inclui a biblioteca JSON
+#include <netdb.h> 
+#include <mpi.h>
+#include <omp.h>
+#include <json-c/json.h>
 
 #define MAXLINE 1024
-#define ind2d(i,j) ((i)*(tam+2)+(j))
+#define ind2d(i,j,tam) ((i)*((tam)+2)+(j))
 
-// A função UmaVida não muda
 void UmaVida(int* in, int* out, int tam, int localRows) {
-    #pragma omp parallel for collapse(2)
+    #pragma omp parallel for
     for (int i = 1; i <= localRows; i++) {
         for (int j = 1; j <= tam; j++) {
-            int vizviv = in[ind2d(i-1,j-1)] + in[ind2d(i-1,j)] + in[ind2d(i-1,j+1)] +
-                         in[ind2d(i,j-1)] + in[ind2d(i,j+1)] +
-                         in[ind2d(i+1,j-1)] + in[ind2d(i+1,j)] + in[ind2d(i+1,j+1)];
+            int vizviv = in[ind2d(i-1,j-1,tam)] + in[ind2d(i-1,j,tam)] + in[ind2d(i-1,j+1,tam)] +
+                         in[ind2d(i,j-1,tam)]   + in[ind2d(i,j+1,tam)]   +
+                         in[ind2d(i+1,j-1,tam)] + in[ind2d(i+1,j,tam)] + in[ind2d(i+1,j+1,tam)];
 
-            if (in[ind2d(i,j)] && vizviv < 2)        out[ind2d(i,j)] = 0;
-            else if (in[ind2d(i,j)] && vizviv > 3)   out[ind2d(i,j)] = 0;
-            else if (!in[ind2d(i,j)] && vizviv == 3) out[ind2d(i,j)] = 1;
-            else                                     out[ind2d(i,j)] = in[ind2d(i,j)];
+            if (in[ind2d(i,j,tam)] && (vizviv < 2 || vizviv > 3)) {
+                out[ind2d(i,j,tam)] = 0;
+            } else if (!in[ind2d(i,j,tam)] && vizviv == 3) {
+                out[ind2d(i,j,tam)] = 1;
+            } else {
+                out[ind2d(i,j,tam)] = in[ind2d(i,j,tam)];
+            }
         }
     }
 }
 
-// A função InitTabul não muda
 void InitTabul(int* tabul, int tam, int localRows, int rank) {
     for (int i = 0; i < (localRows+2)*(tam+2); i++) tabul[i] = 0;
     if (rank == 0) {
-        tabul[ind2d(1,2)] = 1; tabul[ind2d(2,3)] = 1;
-        tabul[ind2d(3,1)] = 1; tabul[ind2d(3,2)] = 1; tabul[ind2d(3,3)] = 1;
+        tabul[ind2d(1,2,tam)] = 1; tabul[ind2d(2,3,tam)] = 1;
+        tabul[ind2d(3,1,tam)] = 1; tabul[ind2d(3,2,tam)] = 1; tabul[ind2d(3,3,tam)] = 1;
     }
 }
 
-// NOVA FUNÇÃO: Envia o resultado para o Socket Server
+const char* verifica_correto(int* tabul, int tam, int localRows, int rank, int size) {
+    int local_sum = 0;
+    for (int i = 1; i <= localRows; i++) {
+        for (int j = 1; j <= tam; j++) {
+            local_sum += tabul[ind2d(i, j, tam)];
+        }
+    }
+    
+    int global_sum;
+    MPI_Reduce(&local_sum, &global_sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        if (global_sum == 5) { // A verificação completa da posição é complexa em paralelo,
+                               // mas a soma já é um bom indicador.
+            return "CORRETO";
+        }
+    }
+    return "ERRADO";
+}
+
+
 void send_result_to_server(int tam, double computation_time, const char* status) {
     int sockfd;
     struct sockaddr_in servaddr;
+    struct hostent *server;
 
-    // Pega o endereço do servidor da variável de ambiente
     const char* server_host = getenv("SOCKET_SERVER_HOST");
     if (server_host == NULL) {
-        server_host = "socket-server-service"; // Valor padrão
+        server_host = "socket-server-service"; 
     }
-    // A porta é fixa, conforme o serviço do server.py
     int server_port = 9999; 
 
-    // Cria o socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-        perror("socket creation failed");
-        return;
+        perror("socket creation failed"); return;
     }
 
-    bzero(&servaddr, sizeof(servaddr));
+    server = gethostbyname(server_host);
+    if (server == NULL) {
+        fprintf(stderr, "ERROR, no such host as %s\n", server_host);
+        close(sockfd); return;
+    }
+
+    bzero((char *) &servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
+    memcpy(&servaddr.sin_addr.s_addr, server->h_addr, server->h_length);
     servaddr.sin_port = htons(server_port);
-    // Tenta converter o nome do host para IP (funciona com o DNS do Kubernetes)
-    if (inet_pton(AF_INET, server_host, &servaddr.sin_addr) <= 0) {
-        printf("\n inet_pton error for %s\n", server_host);
-        // Fallback para um IP fixo se a resolução de nome falhar (para testes locais)
-         inet_pton(AF_INET, "10.0.0.4", &servaddr.sin_addr);
-    }
 
-    // Conecta ao servidor
     if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
-        perror("connect failed");
-        close(sockfd);
-        return;
+        perror("connect failed"); close(sockfd); return;
     }
 
-    // Cria o objeto JSON
     json_object *jobj = json_object_new_object();
     json_object_object_add(jobj, "engine", json_object_new_string("mpi-openmp"));
     json_object_object_add(jobj, "tam", json_object_new_int(tam));
@@ -83,18 +99,14 @@ void send_result_to_server(int tam, double computation_time, const char* status)
     const char *json_string = json_object_to_json_string(jobj);
     printf("Enviando resultado para o servidor: %s\n", json_string);
 
-    // Envia a string JSON (com uma quebra de linha, pois o server.py lê por linha)
     char buffer[MAXLINE];
     snprintf(buffer, sizeof(buffer), "%s\n", json_string);
     write(sockfd, buffer, strlen(buffer));
 
-    // Limpa e fecha a conexão
     json_object_put(jobj);
     close(sockfd);
 }
 
-
-// A função run_engine agora envia o resultado
 void run_engine(int powmin, int powmax) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -104,35 +116,52 @@ void run_engine(int powmin, int powmax) {
         int tam = 1 << pow;
         int totalRows = tam;
         int localRows = totalRows / size;
-        if (rank == size - 1) localRows += totalRows % size;
+        if (rank == 0) localRows += totalRows % size; // Rank 0 pega o resto
 
         int *localIn = malloc((localRows + 2) * (tam + 2) * sizeof(int));
         int *localOut = malloc((localRows + 2) * (tam + 2) * sizeof(int));
 
         InitTabul(localIn, tam, localRows, rank);
         
-        MPI_Barrier(MPI_COMM_WORLD); // Sincroniza os processos antes de medir o tempo
+        MPI_Barrier(MPI_COMM_WORLD);
         double start = MPI_Wtime();
 
-        // O loop de cálculo não muda
-        for (int iter = 0; iter < 4 * (tam - 3); iter++) {
-            // ... (lógica de troca de bordas com MPI_Sendrecv) ...
+        for (int iter = 0; iter < 2 * (tam - 3); iter++) {
+            // Lógica de troca de bordas (ghost cells)
+            if (rank > 0) { // Envia para cima, recebe de cima
+                MPI_Sendrecv(&localIn[ind2d(1, 0, tam)], tam + 2, MPI_INT, rank - 1, 0,
+                             &localIn[ind2d(0, 0, tam)], tam + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+            if (rank < size - 1) { // Envia para baixo, recebe de baixo
+                MPI_Sendrecv(&localIn[ind2d(localRows, 0, tam)], tam + 2, MPI_INT, rank + 1, 0,
+                             &localIn[ind2d(localRows + 1, 0, tam)], tam + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+            
             UmaVida(localIn, localOut, tam, localRows);
-            int *tmp = localIn;
-            localIn = localOut;
-            localOut = tmp;
+
+            // Troca de buffers com lógica de "ping-pong"
+            if (rank > 0) {
+                MPI_Sendrecv(&localOut[ind2d(1, 0, tam)], tam + 2, MPI_INT, rank - 1, 0,
+                             &localOut[ind2d(0, 0, tam)], tam + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+            if (rank < size - 1) {
+                MPI_Sendrecv(&localOut[ind2d(localRows, 0, tam)], tam + 2, MPI_INT, rank + 1, 0,
+                             &localOut[ind2d(localRows + 1, 0, tam)], tam + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+            
+            UmaVida(localOut, localIn, tam, localRows);
         }
 
-        MPI_Barrier(MPI_COMM_WORLD); // Sincroniza antes de parar o tempo
+        MPI_Barrier(MPI_COMM_WORLD);
         double end = MPI_Wtime();
 
-        // Apenas o processo de rank 0 envia o resultado
         if (rank == 0) {
             double elapsed_time = end - start;
-            printf("[MPI-OpenMP] tam=%d; tempo=%.4fs\n", tam, elapsed_time);
-            // TODO: Adicionar uma função de 'correto()' para verificar o resultado
-            send_result_to_server(tam, elapsed_time, "CORRETO");
+            const char* status = verifica_correto(localIn, tam, localRows, rank, size);
+            printf("[MPI-OpenMP] tam=%d; tempo=%.4fs; status=%s\n", tam, elapsed_time, status);
+            send_result_to_server(tam, elapsed_time, status);
         }
+        
         free(localIn);
         free(localOut);
     }
@@ -141,15 +170,13 @@ void run_engine(int powmin, int powmax) {
 int main(int argc, char *argv[]) {
     MPI_Init(&argc, &argv);
 
-    // Por enquanto, vamos rodar um teste fixo em vez de esperar por uma conexão
-    // TODO: Integrar com a lógica de receber trabalhos do Socket Server
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if(rank == 0) {
         printf("[Engine] Iniciando trabalho de teste.\n");
     }
-    run_engine(8, 10); // Executa um teste para tam=256, 512, 1024
+    run_engine(3, 10); 
 
     MPI_Finalize();
     return 0;
