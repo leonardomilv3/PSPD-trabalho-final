@@ -1,0 +1,21 @@
+# Usa imagem base com MPI e OpenMP
+FROM mpioperator/mpi-base:latest
+
+# Instala dependências de rede
+RUN apt-get update && \
+    apt-get install -y build-essential libopenmpi-dev net-tools
+
+# Cria diretório da aplicação
+WORKDIR /app
+
+# Copia o código da engine para o container
+COPY engine_socket_mpi_openmp.c .
+
+# Compila com suporte a OpenMP e MPI
+RUN mpicc -fopenmp -o engine engine_socket_mpi_openmp.c
+
+# Exponha a porta do socket
+EXPOSE 8080
+
+# Comando padrão: executa a engine com MPI
+CMD ["mpirun", "-np", "4", "./engine"]
