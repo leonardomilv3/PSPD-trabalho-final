@@ -4,17 +4,16 @@ import os
 from elasticsearch import AsyncElasticsearch
     
 # --- Configuração ---
-#52.233.90.114
-SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "127.0.0.1")
-SPARK_ENGINE_PORT = int(os.environ.get("SPARK_ENGINE_PORT", 5001))
+SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "52.233.90.114")
+SPARK_ENGINE_PORT = int(os.environ.get("SPARK_ENGINE_PORT", 5000))
 
-OMP_ENGINE_HOST = os.environ.get("OMP_ENGINE_HOST", "127.0.0.1");
-OMP_ENGINE_PORT = int(os.environ.get("OMP_ENGINE_PORT", 5002));
+OMP_ENGINE_HOST = os.environ.get("OMP_ENGINE_HOST", "20.57.128.36");
+OMP_ENGINE_PORT = int(os.environ.get("OMP_ENGINE_PORT", 5000));
 
 
 SERVER_PORT = int(os.environ.get("SERVER_PORT", 5000))
 ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "elasticsearch-service")
-ES_URL = f"http://localhost:9200"
+ES_URL = f"http://{ELASTIC_HOST}:9200"
 
 # --- Elasticsearch ---
 es_client = es_client = AsyncElasticsearch(
