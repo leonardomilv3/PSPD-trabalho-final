@@ -16,7 +16,7 @@ spec:
         kubernetes.io/hostname: vm3
       containers:
       - name: spark-engine
-        image: spark-engine
+        image: leonardomilv3/spark-engine
         imagePullPolicy: Never
         ports:
         - containerPort: 8080

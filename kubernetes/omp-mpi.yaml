@@ -13,10 +13,10 @@ spec:
         app: omp-mpi-engine
     spec:
       nodeSelector:
-        kubernetes.io/hostname: vm1
+        kubernetes.io/hostname: vm2
       containers:
       - name: omp-mpi-engine
-        image: omp-mpi-engine
+        image: leonardomilv3/omp-mpi-engine
         imagePullPolicy: Never
         ports:
         - containerPort: 9000
@@ -33,3 +33,4 @@ spec:
     port: 9000
     targetPort: 9000
   type: NodePort
+
