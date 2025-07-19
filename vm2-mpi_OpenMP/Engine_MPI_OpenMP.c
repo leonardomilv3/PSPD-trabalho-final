@@ -15,7 +15,7 @@
 #define MAXLINE 1024
 #define ind2d(i,j,tam) ((i)*((tam)+2)+(j))
 
-// Variável global para controlar o loop do servidor
+// Variável global para controlar o loop do worker
 volatile int running = 1;
 
 // Handler para SIGINT (Ctrl+C)
@@ -153,52 +153,100 @@ char* run_engine_and_get_results(int powmin, int powmax) {
     return result_str;
 }
 
-// Função para processar uma conexão do cliente
-void handle_client(int client_socket) {
-    char buffer[MAXLINE];
-    int n = read(client_socket, buffer, sizeof(buffer) - 1);
-    if (n <= 0) {
-        close(client_socket);
-        return;
-    }
-    buffer[n] = '\0';
-    
-    printf("Recebido: %s\n", buffer);
-    
-    // Parse do JSON recebido
-    json_object *json_obj = json_tokener_parse(buffer);
-    if (json_obj == NULL) {
-        const char *error_response = "{\"error\": \"Invalid JSON\"}\n";
-        write(client_socket, error_response, strlen(error_response));
-        close(client_socket);
-        return;
+// Função para conectar ao servidor e aguardar comandos
+void connect_to_server_and_work() {
+    const char* server_host = getenv("SERVER_HOST");
+    if (server_host == NULL) {
+        server_host = "localhost"; // padrão
     }
     
-    // Extrair powMin e powMax
-    json_object *powmin_obj, *powmax_obj;
-    int powmin = 3, powmax = 10; // valores padrão
-    
-    if (json_object_object_get_ex(json_obj, "powMin", &powmin_obj)) {
-        powmin = json_object_get_int(powmin_obj);
-    }
-    if (json_object_object_get_ex(json_obj, "powMax", &powmax_obj)) {
-        powmax = json_object_get_int(powmax_obj);
+    const char* server_port_str = getenv("SERVER_PORT");
+    int server_port = 5000; // padrão
+    if (server_port_str != NULL) {
+        server_port = atoi(server_port_str);
     }
     
-    printf("Processando powMin=%d, powMax=%d\n", powmin, powmax);
+    printf("[Engine MPI-OpenMP] Conectando ao servidor %s:%d\n", server_host, server_port);
     
-    // Executar o engine
-    char *result = run_engine_and_get_results(powmin, powmax);
-    
-    // Enviar resposta
-    char response[8192]; // Buffer maior para respostas JSON
-    snprintf(response, sizeof(response), "%s\n", result);
-    write(client_socket, response, strlen(response));
-    
-    // Limpar
-    free(result);
-    json_object_put(json_obj);
-    close(client_socket);
+    while (running) {
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0) {
+            perror("Erro ao criar socket");
+            sleep(5);
+            continue;
+        }
+        
+        struct hostent *server = gethostbyname(server_host);
+        if (server == NULL) {
+            fprintf(stderr, "Erro: não foi possível resolver o host %s\n", server_host);
+            close(sockfd);
+            sleep(5);
+            continue;
+        }
+        
+        struct sockaddr_in servaddr;
+        memset(&servaddr, 0, sizeof(servaddr));
+        servaddr.sin_family = AF_INET;
+        memcpy(&servaddr.sin_addr.s_addr, server->h_addr, server->h_length);
+        servaddr.sin_port = htons(server_port);
+        
+        if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
+            perror("Erro ao conectar ao servidor");
+            close(sockfd);
+            sleep(5);
+            continue;
+        }
+        
+        printf("Conectado ao servidor. Aguardando comandos...\n");
+        
+        // Loop para receber comandos do servidor
+        while (running) {
+            char buffer[MAXLINE];
+            int n = read(sockfd, buffer, sizeof(buffer) - 1);
+            if (n <= 0) {
+                printf("Conexão perdida com o servidor. Reconectando...\n");
+                break;
+            }
+            buffer[n] = '\0';
+            
+            printf("Comando recebido: %s\n", buffer);
+            
+            // Parse do JSON recebido
+            json_object *json_obj = json_tokener_parse(buffer);
+            if (json_obj == NULL) {
+                const char *error_response = "{\"error\": \"Invalid JSON\"}\n";
+                write(sockfd, error_response, strlen(error_response));
+                continue;
+            }
+            
+            // Extrair powMin e powMax
+            json_object *powmin_obj, *powmax_obj;
+            int powmin = 3, powmax = 10; // valores padrão
+            
+            if (json_object_object_get_ex(json_obj, "powMin", &powmin_obj)) {
+                powmin = json_object_get_int(powmin_obj);
+            }
+            if (json_object_object_get_ex(json_obj, "powMax", &powmax_obj)) {
+                powmax = json_object_get_int(powmax_obj);
+            }
+            
+            printf("Processando powMin=%d, powMax=%d\n", powmin, powmax);
+            
+            // Executar o engine
+            char *result = run_engine_and_get_results(powmin, powmax);
+            
+            // Enviar resposta
+            char response[8192]; // Buffer maior para respostas JSON
+            snprintf(response, sizeof(response), "%s\n", result);
+            write(sockfd, response, strlen(response));
+            
+            // Limpar
+            free(result);
+            json_object_put(json_obj);
+        }
+        
+        close(sockfd);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -208,79 +256,15 @@ int main(int argc, char *argv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
     if (rank == 0) {
-        printf("[Engine MPI-OpenMP] Iniciando servidor na porta 5000.\n");
+        printf("[Engine MPI-OpenMP] Iniciando worker.\n");
         
         // Configurar handler para SIGINT
         signal(SIGINT, signal_handler);
         
-        // Criar socket do servidor
-        int server_socket = socket(AF_INET, SOCK_STREAM, 0);
-        if (server_socket < 0) {
-            perror("Erro ao criar socket");
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
+        // Conectar ao servidor e aguardar comandos
+        connect_to_server_and_work();
         
-        // Configurar opções do socket
-        int opt = 1;
-        setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-        
-        // Configurar endereço
-        struct sockaddr_in server_addr;
-        memset(&server_addr, 0, sizeof(server_addr));
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_addr.s_addr = INADDR_ANY;
-        server_addr.sin_port = htons(5000);
-        
-        // Bind
-        if (bind(server_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-            perror("Erro no bind");
-            close(server_socket);
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-        
-        // Listen
-        if (listen(server_socket, 5) < 0) {
-            perror("Erro no listen");
-            close(server_socket);
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-        
-        printf("Servidor aguardando conexões...\n");
-        
-        // Loop principal do servidor
-        while (running) {
-            struct sockaddr_in client_addr;
-            socklen_t client_len = sizeof(client_addr);
-            
-            // Aceitar conexão com timeout
-            fd_set readfds;
-            struct timeval tv;
-            FD_ZERO(&readfds);
-            FD_SET(server_socket, &readfds);
-            tv.tv_sec = 1;
-            tv.tv_usec = 0;
-            
-            int activity = select(server_socket + 1, &readfds, NULL, NULL, &tv);
-            if (activity < 0) {
-                perror("Erro no select");
-                break;
-            } else if (activity == 0) {
-                // Timeout - continuar loop
-                continue;
-            }
-            
-            int client_socket = accept(server_socket, (struct sockaddr*)&client_addr, &client_len);
-            if (client_socket < 0) {
-                perror("Erro ao aceitar conexão");
-                continue;
-            }
-            
-            printf("Nova conexão aceita\n");
-            handle_client(client_socket);
-        }
-        
-        printf("Encerrando servidor...\n");
-        close(server_socket);
+        printf("Encerrando worker...\n");
     }
 
     MPI_Finalize();
