@@ -78,3 +78,5 @@ spec:
     port: 5601
     targetPort: 5601
     nodePort: 30002 # Porta para acessar o Kibana pelo navegador
+
+

@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-engine-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-engine
+  template:
+    metadata:
+      labels:
+        app: spark-engine
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: vm3
+      containers:
+      - name: spark-engine
+        image: spark-engine
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-engine-service
+spec:
+  selector:
+    app: spark-engine
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: NodePort

@@ -9,7 +9,7 @@ RUN pip install elasticsearch
 COPY server.py .
 
 # Informa que o container irá escutar na porta 9999
-EXPOSE 9999
+EXPOSE 5000
 
 # Comando para iniciar o servidor quando o container rodar
 CMD ["python", "server.py"]
