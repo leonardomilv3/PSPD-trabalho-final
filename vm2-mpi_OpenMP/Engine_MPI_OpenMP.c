@@ -4,7 +4,7 @@
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h> 
+#include <netdb.h>
 #include <mpi.h>
 #include <omp.h>
 #include <json-c/json.h>
@@ -15,10 +15,8 @@
 #define MAXLINE 1024
 #define ind2d(i,j,tam) ((i)*((tam)+2)+(j))
 
-// Variável global para controlar o loop do worker
 volatile int running = 1;
 
-// Handler para SIGINT (Ctrl+C)
 void signal_handler(int sig) {
     running = 0;
 }
@@ -62,15 +60,13 @@ const char* verifica_correto(int* tabul, int tam, int localRows, int rank, int s
     MPI_Reduce(&local_sum, &global_sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 
     if (rank == 0) {
-        if (global_sum == 5) { // A verificação completa da posição é complexa em paralelo,
-                               // mas a soma já é um bom indicador.
+        if (global_sum == 5) {
             return "CORRETO";
         }
     }
     return "ERRADO";
 }
 
-// Função para executar o engine e retornar resultados como JSON
 char* run_engine_and_get_results(int powmin, int powmax) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -82,7 +78,7 @@ char* run_engine_and_get_results(int powmin, int powmax) {
         int tam = 1 << pow;
         int totalRows = tam;
         int localRows = totalRows / size;
-        if (rank == 0) localRows += totalRows % size; // Rank 0 pega o resto
+        if (rank == 0) localRows += totalRows % size;
 
         int *localIn = malloc((localRows + 2) * (tam + 2) * sizeof(int));
         int *localOut = malloc((localRows + 2) * (tam + 2) * sizeof(int));
@@ -93,28 +89,7 @@ char* run_engine_and_get_results(int powmin, int powmax) {
         double start = MPI_Wtime();
 
         for (int iter = 0; iter < 2 * (tam - 3); iter++) {
-            // Lógica de troca de bordas (ghost cells)
-            if (rank > 0) { // Envia para cima, recebe de cima
-                MPI_Sendrecv(&localIn[ind2d(1, 0, tam)], tam + 2, MPI_INT, rank - 1, 0,
-                             &localIn[ind2d(0, 0, tam)], tam + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            if (rank < size - 1) { // Envia para baixo, recebe de baixo
-                MPI_Sendrecv(&localIn[ind2d(localRows, 0, tam)], tam + 2, MPI_INT, rank + 1, 0,
-                             &localIn[ind2d(localRows + 1, 0, tam)], tam + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            
             UmaVida(localIn, localOut, tam, localRows);
-
-            // Troca de buffers com lógica de "ping-pong"
-            if (rank > 0) {
-                MPI_Sendrecv(&localOut[ind2d(1, 0, tam)], tam + 2, MPI_INT, rank - 1, 0,
-                             &localOut[ind2d(0, 0, tam)], tam + 2, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            if (rank < size - 1) {
-                MPI_Sendrecv(&localOut[ind2d(localRows, 0, tam)], tam + 2, MPI_INT, rank + 1, 0,
-                             &localOut[ind2d(localRows + 1, 0, tam)], tam + 2, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            }
-            
             UmaVida(localOut, localIn, tam, localRows);
         }
 
@@ -124,50 +99,45 @@ char* run_engine_and_get_results(int powmin, int powmax) {
         if (rank == 0) {
             double elapsed_time = end - start;
             const char* status = verifica_correto(localIn, tam, localRows, rank, size);
-            
-            // Criar objeto JSON para este resultado
+
             json_object *result_obj = json_object_new_object();
             json_object_object_add(result_obj, "tam", json_object_new_int(tam));
             json_object_object_add(result_obj, "computation_time", json_object_new_double(elapsed_time));
             json_object_object_add(result_obj, "status", json_object_new_string(status));
-            
+
             json_object_array_add(results_array, result_obj);
             
             printf("[MPI-OpenMP] tam=%d; tempo=%.4fs; status=%s\n", tam, elapsed_time, status);
         }
-        
+
         free(localIn);
         free(localOut);
     }
 
-    // Criar resposta final
     json_object *response = json_object_new_object();
     json_object_object_add(response, "engine", json_object_new_string("mpi-openmp"));
     json_object_object_add(response, "results", results_array);
 
     const char *json_string = json_object_to_json_string(response);
     char *result_str = strdup(json_string);
-    
     json_object_put(response);
-    
     return result_str;
 }
 
-// Função para conectar ao servidor e aguardar comandos
-void connect_to_server_and_work() {
-    const char* server_host = getenv("SERVER_HOST");
+void connect_to_main_server() {
+    const char* server_host = getenv("MAIN_SERVER_HOST");
     if (server_host == NULL) {
-        server_host = "localhost"; // padrão
+        server_host = "localhost";
     }
-    
-    const char* server_port_str = getenv("SERVER_PORT");
-    int server_port = 5000; // padrão
+
+    const char* server_port_str = getenv("MAIN_SERVER_PORT");
+    int server_port = 5000;
     if (server_port_str != NULL) {
         server_port = atoi(server_port_str);
     }
-    
-    printf("[Engine MPI-OpenMP] Conectando ao servidor %s:%d\n", server_host, server_port);
-    
+
+    printf("[Engine MPI-OpenMP] Conectando ao servidor principal %s:%d\n", server_host, server_port);
+
     while (running) {
         int sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) {
@@ -175,7 +145,7 @@ void connect_to_server_and_work() {
             sleep(5);
             continue;
         }
-        
+
         struct hostent *server = gethostbyname(server_host);
         if (server == NULL) {
             fprintf(stderr, "Erro: não foi possível resolver o host %s\n", server_host);
@@ -183,68 +153,62 @@ void connect_to_server_and_work() {
             sleep(5);
             continue;
         }
-        
+
         struct sockaddr_in servaddr;
         memset(&servaddr, 0, sizeof(servaddr));
         servaddr.sin_family = AF_INET;
         memcpy(&servaddr.sin_addr.s_addr, server->h_addr, server->h_length);
         servaddr.sin_port = htons(server_port);
-        
+
         if (connect(sockfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0) {
-            perror("Erro ao conectar ao servidor");
+            perror("Erro ao conectar ao servidor principal");
             close(sockfd);
             sleep(5);
             continue;
         }
-        
-        printf("Conectado ao servidor. Aguardando comandos...\n");
-        
-        // Loop para receber comandos do servidor
+
+        printf("Conectado ao servidor principal. Aguardando comandos...\n");
+
         while (running) {
             char buffer[MAXLINE];
             int n = read(sockfd, buffer, sizeof(buffer) - 1);
             if (n <= 0) {
-                printf("Conexão perdida com o servidor. Reconectando...\n");
+                printf("Conexão perdida com o servidor principal. Reconectando...\n");
                 break;
             }
             buffer[n] = '\0';
-            
+
             printf("Comando recebido: %s\n", buffer);
-            
-            // Parse do JSON recebido
+
             json_object *json_obj = json_tokener_parse(buffer);
             if (json_obj == NULL) {
                 const char *error_response = "{\"error\": \"Invalid JSON\"}\n";
                 write(sockfd, error_response, strlen(error_response));
                 continue;
             }
-            
-            // Extrair powMin e powMax
+
             json_object *powmin_obj, *powmax_obj;
-            int powmin = 3, powmax = 10; // valores padrão
-            
+            int powmin = 3, powmax = 5;
+
             if (json_object_object_get_ex(json_obj, "powMin", &powmin_obj)) {
                 powmin = json_object_get_int(powmin_obj);
             }
             if (json_object_object_get_ex(json_obj, "powMax", &powmax_obj)) {
                 powmax = json_object_get_int(powmax_obj);
             }
-            
+
             printf("Processando powMin=%d, powMax=%d\n", powmin, powmax);
-            
-            // Executar o engine
+
             char *result = run_engine_and_get_results(powmin, powmax);
-            
-            // Enviar resposta
-            char response[8192]; // Buffer maior para respostas JSON
+
+            char response[8192];
             snprintf(response, sizeof(response), "%s\n", result);
             write(sockfd, response, strlen(response));
-            
-            // Limpar
+
             free(result);
             json_object_put(json_obj);
         }
-        
+
         close(sockfd);
     }
 }
@@ -255,16 +219,16 @@ int main(int argc, char *argv[]) {
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
+    signal(SIGINT, signal_handler);
+
     if (rank == 0) {
-        printf("[Engine MPI-OpenMP] Iniciando worker.\n");
-        
-        // Configurar handler para SIGINT
-        signal(SIGINT, signal_handler);
-        
-        // Conectar ao servidor e aguardar comandos
-        connect_to_server_and_work();
-        
-        printf("Encerrando worker...\n");
+        printf("[Engine MPI-OpenMP] Iniciando com rank 0\n");
+        connect_to_main_server();
+        printf("Encerrando engine MPI-OpenMP...\n");
+    } else {
+        while (running) {
+            sleep(1);
+        }
     }
 
     MPI_Finalize();
