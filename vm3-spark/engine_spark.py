@@ -64,7 +64,7 @@ def processar_com_spark(powmin, powmax):
     spark.stop()
     return resultados
 
-def start_socket_worker(host='0.0.0.0', port=6000):
+def start_socket_worker(host='0.0.0.0', port=5000):
     print(f"[Spark Engine] Escutando socket em {host}:{port}...")
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((host, port))
