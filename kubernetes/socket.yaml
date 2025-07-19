@@ -17,7 +17,7 @@ spec:
       containers:
       - name: socket-server
         image: leonardomilv3/socket-server:latest
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 5000
 ---
