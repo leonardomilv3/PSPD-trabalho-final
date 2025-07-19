@@ -38,3 +38,90 @@ A Figura 1 ilustra de forma completa toda a infraestrutura e comunicação entre
 
 
 
+## Confi
+
+Exececutar todos os comandos abaixo, tanto no nó mestre quanto nos nós workers.
+
+```bash
+
+# Atualizar pacotes
+sudo apt update && sudo apt upgrade -y
+
+# Desabilitar swap
+sudo swapoff -a
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+# Instalar dependências
+sudo apt install -y apt-transport-https ca-certificates curl
+
+# Adicionar repositório Docker
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Instalar Docker
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io
+
+# Habilitar e iniciar Docker
+sudo systemctl enable docker
+sudo systemctl start docker
+
+# Adicionar repositório Kubernetes
+sudo curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+echo "deb https://apt.kubernetes.io/ kubernetes-xenial main" | \
+sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+# Instalar kubeadm, kubelet e kubectl
+sudo snap install kubelet --classic
+sudo snap install kubectl --classic
+sudo snap install kubeadm --classic
+
+
+
+```
+
+
+## Intalar CRI (Container Run Time)
+
+
+Instale containerd (ou CRI-O) e crictl
+
+
+
+CHECK kubectl kubelet kubeadm
+
+
+
+
+## Instalar kubeadm kubectl kubelet
+
+
+kubeadm: the command to bootstrap the cluster.
+
+kubelet: the component that runs on all of the machines in your cluster and does things like starting pods and containers.
+
+kubectl: the command line util to talk to your cluster.
+
+
+Para instalar `kubeadm`, `kubectl` e `kubelet` foi seguido o tutorial de instalação
+oferecido pela documentação oficial do Kubernertes, seguindo o link abaixo.
+
+- [Instalar kubeadm kubectl kubelet](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/)
+
+
+
+## 2. Aplique a rede de pods (Flannel)
+
+A rede de pods utilizada foi a Flannel, então no nó master foi executado o comando:
+
+```bash
+
+kubectl apply -f https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+
+```
+
+
+
+
+
