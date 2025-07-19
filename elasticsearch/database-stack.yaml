@@ -13,6 +13,8 @@ spec:
       labels:
         app: elasticsearch
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: vm1 # <--- ADICIONADO AQUI
       containers:
       - name: elasticsearch
         image: docker.elastic.co/elasticsearch/elasticsearch:8.9.0
@@ -24,6 +26,15 @@ spec:
           value: "single-node"
         - name: xpack.security.enabled
           value: "false" # Desabilita segurança para simplificar o projeto
+
+        # --- ADICIONADO: Garantia de recursos ---
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1"
 ---
 apiVersion: v1
 kind: Service
@@ -53,6 +64,8 @@ spec:
       labels:
         app: kibana
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: vm1 # <--- E ADICIONADO AQUI
       containers:
       - name: kibana
         image: docker.elastic.co/kibana/kibana:8.9.0
@@ -62,8 +75,16 @@ spec:
         env:
         - name: ELASTICSEARCH_HOSTS
           value: "http://elasticsearch-service:9200" # Aponta para o serviço do Elastic
-        - name: SERVER_SSL_ENABLED
-          value: "false"
+
+        
+        # --- ADICIONADO: Garantia de recursos ---
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
