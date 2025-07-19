@@ -4,6 +4,7 @@ WORKDIR /app
 
 # Instala a biblioteca do Elasticsearch que o server.py usa
 RUN pip install elasticsearch
+RUN pip install aiothttp
 
 # Copia o código do servidor para dentro do container
 COPY server.py .
