@@ -1,21 +1,18 @@
-# Usar uma imagem base do Spark oficial que já vem com tudo configurado
+# Usa imagem Spark completa com suporte a Python
 FROM bitnami/spark:3
 
-# Instalar a biblioteca Python para conectar ao Kafka
+# Define usuário root para poder instalar pacotes
 USER root
+
+# Instala as bibliotecas necessárias
 RUN pip install pyspark numpy
 
-
-# Copiar nosso script do Jogo da Vida para dentro da imagem
-COPY engine_spark.py /app/
-
-# Definir o diretório de trabalho
+# Cria diretório de trabalho e copia o script
 WORKDIR /app
+COPY engine_spark.py .
 
-# Comando para executar a aplicação quando o container iniciar
-CMD ["spark-submit", "engine_spark.py"]
+# Expõe a porta 5000 para o socket
+EXPOSE 5000
 
-
-
-
-
+# Comando para iniciar o worker socket com Spark
+CMD ["python", "engine_spark.py"]
