@@ -48,8 +48,8 @@ A arquitetura é composta por três máquinas virtuais principais:
 - **Função principal**: Processamento massivamente paralelo de grandes volumes de dados com Spark.
 - **Tecnologias utilizadas**:
   - Simulação em Python com NumPy para otimização vetorial.
-  - Comunicação com Kafka para ingestão e entrega de jobs.
-- **Containerização**: Dockerfile com pyspark, kafka-python e demais dependências.
+  - Processamento de grandes volumes de dados com Spark.
+- **Containerização**: Dockerfile com pyspark e demais dependências.
 
 <p align="center">
   <img src="./assets/Arquitetura3VMs.png" alt="Figura 1 - Arquitetura geral" width="100%">
@@ -60,7 +60,7 @@ A arquitetura é composta por três máquinas virtuais principais:
 ## Metodologia de Desenvolvimento
 
 - **Divisão inicial da equipe**:
-  - Socket Server / Kafka: João Barreto
+  - Socket Server: João Barreto
   - Kubernetes: Leonardo Milomes
   - MPI/OMP Engine: Artur Vinicius
   - Spark Engine: Miguel Matos
