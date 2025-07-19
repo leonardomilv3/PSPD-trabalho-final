@@ -16,7 +16,8 @@ COPY . .
 # Compila o código DENTRO do container, linkando com a biblioteca json-c
 RUN mpicc -fopenmp -o engine Engine_MPI_OpenMP.c -ljson-c
 
-# O EXPOSE foi removido, pois este container não escuta por conexões.
+# Expõe a porta 5000 para conexões do servidor
+EXPOSE 5000
 
-# Comando padrão: executa UMA instância da engine
-CMD ["./engine"]
+# Comando padrão: executa o engine como servidor
+CMD ["mpirun", "--allow-run-as-root", "-np", "1", "./engine"]
