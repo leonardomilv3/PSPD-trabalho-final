@@ -3,8 +3,7 @@ FROM python:3.9-slim
 WORKDIR /app
 
 # Instala a biblioteca do Elasticsearch que o server.py usa
-RUN pip install elasticsearch
-RUN pip install aiothttp
+RUN pip install elasticsearch aiohttp
 
 # Copia o código do servidor para dentro do container
 COPY server.py .
