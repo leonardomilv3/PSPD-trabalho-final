@@ -17,7 +17,7 @@ spec:
       containers:
       - name: omp-mpi-engine
         image: leonardomilv3/omp-mpi-engine
-        imagePullPolicy: Never
+        imagePullPolicy: Always
         ports:
         - containerPort: 9000
 ---

@@ -13,6 +13,7 @@ COPY engine_spark.py .
 
 # Expõe a porta 5000 para o socket
 EXPOSE 5000
+EXPOSE 8080
 
 # Comando para iniciar o worker socket com Spark
 CMD ["python", "engine_spark.py"]

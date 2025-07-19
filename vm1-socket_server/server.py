@@ -4,10 +4,12 @@ import os
 from elasticsearch import AsyncElasticsearch
 
 # --- Configuração ---
-SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "52.233.90.114")
+# SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "52.233.90.114")
+SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "spark-engine-service")
 SPARK_ENGINE_PORT = int(os.environ.get("SPARK_ENGINE_PORT", 5000))
 
-OMP_MPI_ENGINE_HOST = os.environ.get("OMP_MPI_ENGINE_HOST", "20.57.128.36")
+# OMP_MPI_ENGINE_HOST = os.environ.get("OMP_MPI_ENGINE_HOST", "20.57.128.36")
+OMP_MPI_ENGINE_HOST = os.environ.get("OMP_MPI_ENGINE_HOST", "omp-mpi-engine-service")
 OMP_MPI_ENGINE_PORT = int(os.environ.get("OMP_MPI_ENGINE_PORT", 5000))
 
 

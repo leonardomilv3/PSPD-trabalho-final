@@ -8,7 +8,7 @@ RUN pip install elasticsearch aiohttp
 # Copia o código do servidor para dentro do container
 COPY server.py .
 
-# Informa que o container irá escutar na porta 9999
+# Informa que o container irá escutar na porta 5000
 EXPOSE 5000
 
 # Comando para iniciar o servidor quando o container rodar

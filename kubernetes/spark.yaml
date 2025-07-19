@@ -16,10 +16,11 @@ spec:
         kubernetes.io/hostname: vm3
       containers:
       - name: spark-engine
-        image: leonardomilv3/spark-engine
-        imagePullPolicy: Never
+        image: leonardomilv3/spark-engine:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 8080
+        - containerPort: 5000
 ---
 apiVersion: v1
 kind: Service
@@ -32,4 +33,7 @@ spec:
   - protocol: TCP
     port: 8080
     targetPort: 8080
+  - protocol: TCP
+    port: 5000
+    targetPort: 5000
   type: NodePort

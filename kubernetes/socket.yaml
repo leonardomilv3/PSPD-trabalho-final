@@ -20,6 +20,19 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 5000
+        env:
+        - name: SPARK_ENGINE_HOST
+          value: "spark-engine-service"
+        - name: SPARK_ENGINE_PORT
+          value: "5000"
+        - name: OMP_MPI_ENGINE_HOST
+          value: "omp-mpi-engine-service"
+        - name: OMP_MPI_ENGINE_PORT
+          value: "5000"
+        - name: SERVER_PORT
+          value: "5000"
+        - name: ELASTIC_HOST
+          value: "elasticsearch-service"
 ---
 apiVersion: v1
 kind: Service
@@ -32,4 +45,5 @@ spec:
   - protocol: TCP
     port: 5000
     targetPort: 5000
+    nodePort: 30080 
   type: NodePort
