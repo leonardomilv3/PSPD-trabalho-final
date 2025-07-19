@@ -3,7 +3,7 @@ FROM bitnami/spark:3
 
 # Instalar a biblioteca Python para conectar ao Kafka
 USER root
-RUN pip install kafka-python numpy
+RUN pip install pyspark numpy
 
 
 # Copiar nosso script do Jogo da Vida para dentro da imagem
