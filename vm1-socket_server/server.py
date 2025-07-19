@@ -4,60 +4,101 @@ import os
 from elasticsearch import AsyncElasticsearch
 
 # --- Configuração ---
-# Lê as configurações das variáveis de ambiente para maior flexibilidade
-ELASTIC_HOST = os.environ.get('ELASTIC_HOST', 'elasticsearch-service')
-SERVER_PORT = int(os.environ.get('SERVER_PORT', 9999))
+SPARK_ENGINE_HOST = os.environ.get("SPARK_ENGINE_HOST", "52.233.90.114")
+SPARK_ENGINE_PORT = int(os.environ.get("SPARK_ENGINE_PORT", 5000))
+
+OMP_MPI_ENGINE_HOST = os.environ.get("OMP_MPI_ENGINE_HOST", "20.57.128.36")
+OMP_MPI_ENGINE_PORT = int(os.environ.get("OMP_MPI_ENGINE_PORT", 5000))
+
+
+SERVER_PORT = int(os.environ.get("SERVER_PORT", 5000))
+ELASTIC_HOST = os.environ.get("ELASTIC_HOST", "elasticsearch-service")
 ES_URL = f"http://{ELASTIC_HOST}:9200"
 
-# --- Cliente Elasticsearch ---
-try:
-    es_client = AsyncElasticsearch(ES_URL)
-    print(f"Tentando conectar ao Elasticsearch em {ES_URL}...")
-except Exception as e:
-    print(f"Erro ao inicializar cliente Elasticsearch: {e}")
-    es_client = None
+# --- Elasticsearch ---
+es_client = AsyncElasticsearch(ES_URL)
 
-# --- Lógica do Servidor ---
+# --- Comunicação com as engines ---
+async def communicate_with_engine(host, port, payload, engine_name):
+    try:
+        reader, writer = await asyncio.open_connection(host, port)
+        writer.write((payload + '\n').encode())
+        await writer.drain()
+
+        response = await reader.readline()
+        writer.close()
+        await writer.wait_closed()
+
+        response_text = response.decode().strip()
+
+        # Indexa no Elasticsearch
+        await es_client.index(index="engine_results", document={
+            "engine": engine_name,
+            "input": json.loads(payload),
+            "output": response_text
+        })
+
+        return response_text
+    except Exception as e:
+        error_msg = f"Erro com engine {engine_name}: {str(e)}"
+        await es_client.index(index="engine_results", document={
+            "engine": engine_name,
+            "input": json.loads(payload),
+            "output": error_msg
+        })
+        return error_msg
+
+# --- Lógica principal do servidor ---
 async def handle_client(reader, writer):
-    """Função chamada para cada nova conexão de cliente."""
     addr = writer.get_extra_info('peername')
     print(f"Nova conexão de {addr}")
-    
+
     try:
-        while True:
-            # Lê uma linha de dados da conexão
-            data = await reader.readline()
-            if not data:
-                break # Conexão fechada pelo cliente
+        data = await reader.readline()
+        if not data:
+            return
 
-            message = data.decode().strip()
-            print(f"Recebido de {addr}: {message}")
-            
-            # Tenta processar a mensagem como JSON e enviar ao Elasticsearch
-            try:
-                log_data = json.loads(message)
-                # Se for um resultado de um engine, envia para o Elasticsearch
-                if 'engine' in log_data and es_client:
-                    await es_client.index(index="engine_results", document=log_data)
-                    print(f"Resultado do engine '{log_data.get('engine')}' enviado ao Elasticsearch.")
-            except Exception as e:
-                print(f"Aviso: a mensagem não é um JSON válido ou falhou ao enviar para o ES. Erro: {e}")
+        message = data.decode().strip()
+        print(f"Recebido de {addr}: {message}")
 
-    except asyncio.CancelledError:
-        pass # Tarefa cancelada
+        try:
+            payload = json.loads(message)
+            powMin = payload.get("powMin")
+            powMax = payload.get("powMax")
+
+            if powMin is None or powMax is None:
+                raise ValueError("Faltam parâmetros powMin ou powMax.")
+
+            payload_json = json.dumps({"powMin": powMin, "powMax": powMax})
+
+            # Envia para ambas as engines em paralelo
+            result_spark, result_omp = await asyncio.gather(
+                communicate_with_engine(SPARK_ENGINE_HOST, SPARK_ENGINE_PORT, payload_json, "spark"),
+                communicate_with_engine(OMP_MPI_ENGINE_HOST, OMP_MPI_ENGINE_PORT, payload_json, "omp_mpi")
+            )
+
+            final_response = json.dumps({
+                "spark_result": result_spark,
+                "omp_mpi_result": result_omp
+            })
+
+        except Exception as e:
+            final_response = json.dumps({"error": str(e)})
+
+        writer.write((final_response + '\n').encode())
+        await writer.drain()
+
     finally:
         print(f"Fechando conexão com {addr}")
         writer.close()
         await writer.wait_closed()
 
+# --- Inicialização ---
 async def main():
-    """Função principal que inicia o servidor."""
+    print(f"Iniciando servidor socket na porta {SERVER_PORT}")
     server = await asyncio.start_server(handle_client, '0.0.0.0', SERVER_PORT)
-    addrs = ', '.join(str(sock.getsockname()) for sock in server.sockets)
-    print(f'Socket Server iniciado e escutando em {addrs}...')
-    
     async with server:
         await server.serve_forever()
 
 if __name__ == '__main__':
-    asyncio.run(main()) 
+    asyncio.run(main())
